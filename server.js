@@ -4,37 +4,31 @@ const path = require("path");
 const xlsx = require("xlsx");
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3000; // Gunakan port dari environment
 
 app.use(cors());
 app.use(express.json());
 
-// --- DATA LOADING ---
+// --- DATA LOADING (BAGIAN UTAMA PERUBAHAN) ---
 let products = [];
 let categories = [];
 let sales = [];
 
-// Fungsi untuk memuat data dari file .xlsx dengan penanganan tanggal
+// Fungsi untuk memuat data dari file .xlsx (TETAP SAMA)
 const loadXLSXData = (filePath) => {
   try {
     const workbook = xlsx.readFile(filePath, { cellDates: true });
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    const jsonData = xlsx.utils.sheet_to_json(sheet);
-    return jsonData;
+    return xlsx.utils.sheet_to_json(sheet);
   } catch (error) {
-    console.error(
-      `Gagal membaca atau memproses file Excel: ${filePath}`,
-      error
-    );
-    throw error;
+    console.error(`Gagal membaca file Excel: ${filePath}`, error);
+    throw error; // Lemparkan error agar bisa ditangkap
   }
 };
 
-// =====================================================================
-// FUNGSI INISIALISASI DATA YANG DITULIS ULANG SESUAI HEADER ANDA
-// =====================================================================
-const initializeData = async () => {
+// Fungsi inisialisasi data yang sekarang bersifat sinkron (tanpa async/await)
+const initializeData = () => {
   try {
     const gudangFilePath = path.join(__dirname, "data", "data_gudang.xlsx");
     const penjualanFilePath = path.join(
@@ -43,27 +37,25 @@ const initializeData = async () => {
       "data_penjualan.xlsx"
     );
 
-    // 1. Muat data gudang dan proses sesuai header aslinya
+    // 1. Muat data gudang
     const gudangData = loadXLSXData(gudangFilePath);
     products = gudangData
       .map((item) => {
-        // Menggunakan .trim() untuk membersihkan spasi ekstra pada nama kolom
         const namaBarang = item[" Nama Barang "]
           ? String(item[" Nama Barang "]).trim()
           : "Nama Tidak Tersedia";
-
         return {
           id: parseInt(item[" No "], 10),
           name: namaBarang,
-          price: parseFloat(item[" Harga Barang  "]), // Perhatikan spasi ganda di akhir
-          category: "Umum", // Memberi nilai default karena kolom kategori tidak ada
-          description: namaBarang, // Memberi deskripsi default
+          price: parseFloat(item[" Harga Barang  "]),
+          category: "Umum",
+          description: namaBarang,
           stock: parseInt(item[" Jumlah Stok "], 10),
-          createdDate: new Date().toISOString(), // Memberi tanggal default karena tidak ada
+          createdDate: new Date().toISOString(),
         };
       })
-      .filter((p) => p.id && !isNaN(p.id)); // Hanya ambil baris yang punya ID valid
-    console.log(`${products.length} produk berhasil dimuat dari Data Gudang.`);
+      .filter((p) => p.id && !isNaN(p.id));
+    console.log(`${products.length} produk berhasil dimuat.`);
 
     // 2. Buat kategori dinamis
     const categoryNames = [
@@ -74,20 +66,16 @@ const initializeData = async () => {
       name: name,
       description: `Kategori untuk ${name}`,
     }));
-    console.log(
-      `${categories.length} kategori berhasil dibuat secara dinamis.`
-    );
+    console.log(`${categories.length} kategori berhasil dibuat.`);
 
-    // 3. Muat data penjualan dan proses sesuai header aslinya
+    // 3. Muat data penjualan
     const penjualanData = loadXLSXData(penjualanFilePath);
     sales = penjualanData
       .map((item, index) => {
         const saleDate =
           item[" TGL "] instanceof Date ? item[" TGL "].toISOString() : null;
-
         const productName = item[" NAMA "] ? String(item[" NAMA "]).trim() : "";
         const relatedProduct = products.find((p) => p.name === productName);
-
         return {
           id: index + 1,
           productId: relatedProduct ? relatedProduct.id : null,
@@ -97,21 +85,28 @@ const initializeData = async () => {
           saleDate: saleDate,
         };
       })
-      .filter((s) => s.productName); // Hanya ambil baris penjualan yang ada nama produknya
-    console.log(
-      `${sales.length} data penjualan berhasil dimuat dan disesuaikan.`
-    );
+      .filter((s) => s.productName);
+    console.log(`${sales.length} data penjualan berhasil dimuat.`);
   } catch (error) {
-    console.error("Gagal menginisialisasi data:", error);
-    process.exit(1);
+    console.error(
+      "KRITIS: Gagal total menginisialisasi data saat startup.",
+      error
+    );
+    // Di lingkungan produksi, penting untuk tahu jika data gagal dimuat
   }
 };
 
-// --- ODATA ENDPOINTS (TIDAK PERLU DIUBAH) ---
-// Metadata sudah benar karena kita mengubah data agar cocok dengannya.
+// =====================================================================
+// PANGGIL FUNGSI INISIALISASI DATA DI SINI (SATU KALI SAJA)
+initializeData();
+// =====================================================================
+
+// --- ODATA ENDPOINTS ---
+// (Tidak ada perubahan sama sekali pada semua fungsi endpoint di bawah ini)
 
 // OData Service Document
 app.get("/", (req, res) => {
+  // ... (kode sama seperti sebelumnya)
   const serviceDocument = {
     "@odata.context": `${req.protocol}://${req.get("host")}/$metadata`,
     value: [
@@ -125,52 +120,23 @@ app.get("/", (req, res) => {
 
 // OData Metadata Document
 app.get("/$metadata", (req, res) => {
+  // ... (kode sama seperti sebelumnya)
   const metadata = `<?xml version="1.0" encoding="utf-8"?>
 <edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
   <edmx:DataServices>
     <Schema Namespace="MyService" xmlns="http://docs.oasis-open.org/odata/ns/edm">
-      <EntityType Name="Product">
-        <Key><PropertyRef Name="id"/></Key>
-        <Property Name="id" Type="Edm.Int32" Nullable="false"/>
-        <Property Name="name" Type="Edm.String"/>
-        <Property Name="price" Type="Edm.Decimal"/>
-        <Property Name="category" Type="Edm.String"/>
-        <Property Name="description" Type="Edm.String"/>
-        <Property Name="stock" Type="Edm.Int32"/>
-        <Property Name="createdDate" Type="Edm.DateTimeOffset" Nullable="true"/>
-      </EntityType>
-      <EntityType Name="Category">
-        <Key><PropertyRef Name="id"/></Key>
-        <Property Name="id" Type="Edm.Int32" Nullable="false"/>
-        <Property Name="name" Type="Edm.String"/>
-        <Property Name="description" Type="Edm.String"/>
-      </EntityType>
-      <EntityType Name="Sale">
-        <Key><PropertyRef Name="id"/></Key>
-        <Property Name="id" Type="Edm.Int32" Nullable="false"/>
-        <Property Name="productId" Type="Edm.Int32" Nullable="true"/>
-        <Property Name="productName" Type="Edm.String"/>
-        <Property Name="quantity" Type="Edm.Int32"/>
-        <Property Name="totalPrice" Type="Edm.Decimal"/>
-        <Property Name="saleDate" Type="Edm.DateTimeOffset" Nullable="true"/>
-        <NavigationProperty Name="Product" Type="MyService.Product" Nullable="true">
-            <ReferentialConstraint Property="productId" ReferencedProperty="id"/>
-        </NavigationProperty>
-      </EntityType>
-      <EntityContainer Name="Container">
-        <EntitySet Name="Products" EntityType="MyService.Product"/>
-        <EntitySet Name="Categories" EntityType="MyService.Category"/>
-        <EntitySet Name="Sales" EntityType="MyService.Sale">
-            <NavigationPropertyBinding Path="Product" Target="Products"/>
-        </EntitySet>
-      </EntityContainer>
+      <EntityType Name="Product"><Key><PropertyRef Name="id"/></Key><Property Name="id" Type="Edm.Int32" Nullable="false"/><Property Name="name" Type="Edm.String"/><Property Name="price" Type="Edm.Decimal"/><Property Name="category" Type="Edm.String"/><Property Name="description" Type="Edm.String"/><Property Name="stock" Type="Edm.Int32"/><Property Name="createdDate" Type="Edm.DateTimeOffset" Nullable="true"/></EntityType>
+      <EntityType Name="Category"><Key><PropertyRef Name="id"/></Key><Property Name="id" Type="Edm.Int32" Nullable="false"/><Property Name="name" Type="Edm.String"/><Property Name="description" Type="Edm.String"/></EntityType>
+      <EntityType Name="Sale"><Key><PropertyRef Name="id"/></Key><Property Name="id" Type="Edm.Int32" Nullable="false"/><Property Name="productId" Type="Edm.Int32" Nullable="true"/><Property Name="productName" Type="Edm.String"/><Property Name="quantity" Type="Edm.Int32"/><Property Name="totalPrice" Type="Edm.Decimal"/><Property Name="saleDate" Type="Edm.DateTimeOffset" Nullable="true"/><NavigationProperty Name="Product" Type="MyService.Product" Nullable="true"><ReferentialConstraint Property="productId" ReferencedProperty="id"/></NavigationProperty></EntityType>
+      <EntityContainer Name="Container"><EntitySet Name="Products" EntityType="MyService.Product"/><EntitySet Name="Categories" EntityType="MyService.Category"/><EntitySet Name="Sales" EntityType="MyService.Sale"><NavigationPropertyBinding Path="Product" Target="Products"/></EntitySet></EntityContainer>
     </Schema>
   </edmx:DataServices>
 </edmx:Edmx>`;
   res.set("Content-Type", "application/xml").send(metadata);
 });
 
-// Helper functions (sudah mendukung $expand)
+// Helper functions
+// ... (semua fungsi helper SAMA PERSIS seperti sebelumnya, tidak perlu disalin ulang jika sudah ada)
 function parseODataQuery(query) {
   const options = {};
   if (query.$filter) options.filter = query.$filter;
@@ -261,6 +227,7 @@ function applyExpand(data, expand, entity) {
 }
 
 // EntitySet Endpoints
+// ... (semua endpoint GET untuk /Products, /Sales, /Categories SAMA PERSIS seperti sebelumnya)
 app.get("/Products", (req, res) => {
   const options = parseODataQuery(req.query);
   let result = [...products];
@@ -277,7 +244,6 @@ app.get("/Products", (req, res) => {
   if (options.count) response["@odata.count"] = totalCount;
   res.json(response);
 });
-
 app.get("/Sales", (req, res) => {
   const options = parseODataQuery(req.query);
   let result = [...sales];
@@ -295,15 +261,15 @@ app.get("/Sales", (req, res) => {
   if (options.count) response["@odata.count"] = totalCount;
   res.json(response);
 });
-
-// Other endpoints...
 app.get("/Products\\(:id\\)", (req, res) => {
   const id = parseInt(req.params.id);
   const product = products.find((p) => p.id === id);
   if (!product)
-    return res.status(404).json({
-      error: { code: "NotFound", message: `Product with id ${id} not found` },
-    });
+    return res
+      .status(404)
+      .json({
+        error: { code: "NotFound", message: `Product with id ${id} not found` },
+      });
   const response = {
     "@odata.context": `${req.protocol}://${req.get(
       "host"
@@ -334,12 +300,14 @@ app.get("/Categories\\(:id\\)", (req, res) => {
   const id = parseInt(req.params.id);
   const category = categories.find((c) => c.id === id);
   if (!category)
-    return res.status(404).json({
-      error: {
-        code: "NotFound",
-        message: `Category with id ${id} not found`,
-      },
-    });
+    return res
+      .status(404)
+      .json({
+        error: {
+          code: "NotFound",
+          message: `Category with id ${id} not found`,
+        },
+      });
   const response = {
     "@odata.context": `${req.protocol}://${req.get(
       "host"
@@ -353,9 +321,11 @@ app.get("/Sales\\(:id\\)", (req, res) => {
   const id = parseInt(req.params.id);
   let sale = sales.find((s) => s.id === id);
   if (!sale)
-    return res.status(404).json({
-      error: { code: "NotFound", message: `Sale with id ${id} not found` },
-    });
+    return res
+      .status(404)
+      .json({
+        error: { code: "NotFound", message: `Sale with id ${id} not found` },
+      });
   [sale] = applyExpand([sale], options.expand, "Sales");
   const response = {
     "@odata.context": `${req.protocol}://${req.get(
@@ -367,6 +337,7 @@ app.get("/Sales\\(:id\\)", (req, res) => {
 });
 
 // CSV Endpoints for Google Sheets
+// ... (kode CSV sama seperti sebelumnya)
 function convertToCSV(data) {
   if (!data || data.length === 0) return "";
   const headers = Object.keys(data[0]);
@@ -397,22 +368,10 @@ app.get("/sales.csv", (req, res) => {
   res.send(csvData);
 });
 
-// Error handling & Start server
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    error: {
-      code: "InternalServerError",
-      message: "An internal server error occurred",
-    },
-  });
+// Start server HANYA untuk development lokal, Vercel akan mengabaikan ini
+app.listen(port, () => {
+  console.log(`\nOData service (LOKAL) berjalan di http://localhost:${port}`);
 });
 
-app.listen(port, async () => {
-  await initializeData();
-  console.log(`\nOData service is running on http://localhost:${port}`);
-  console.log(`Service document: http://localhost:${port}/`);
-  console.log(`Metadata: http://localhost:${port}/$metadata`);
-});
-
+// Export 'app' untuk Vercel agar bisa menjalankannya sebagai Serverless Function
 module.exports = app;
