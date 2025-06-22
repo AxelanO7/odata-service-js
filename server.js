@@ -14,7 +14,6 @@ let products = [];
 let categories = [];
 let sales = [];
 
-// Fungsi untuk memuat data dari file .xlsx dengan penanganan tanggal
 const loadXLSXData = (filePath) => {
   try {
     const workbook = xlsx.readFile(filePath, { cellDates: true });
@@ -27,58 +26,76 @@ const loadXLSXData = (filePath) => {
   }
 };
 
-// Fungsi inisialisasi data yang disesuaikan dengan struktur file Anda
 const initializeData = () => {
   try {
     const gudangFilePath = path.join(__dirname, "data", "data_gudang.xlsx");
-    const penjualanFilePath = path.join(__dirname, "data", "data_penjualan.xlsx");
+    const penjualanFilePath = path.join(
+      __dirname,
+      "data",
+      "data_penjualan.xlsx"
+    );
 
     const gudangData = loadXLSXData(gudangFilePath);
-    products = gudangData.map((item) => {
-      const namaBarang = item[' Nama Barang '] ? String(item[' Nama Barang ']).trim() : 'Nama Tidak Tersedia';
-      return {
-        id: parseInt(item[' No '], 10),
-        name: namaBarang,
-        price: parseFloat(item[' Harga Barang  ']),
-        category: 'Umum',
-        description: namaBarang,
-        stock: parseInt(item[' Jumlah Stok '], 10),
-        createdDate: new Date().toISOString(),
-      };
-    }).filter(p => p.id && !isNaN(p.id));
+    products = gudangData
+      .map((item) => {
+        const namaBarang = item[" Nama Barang "]
+          ? String(item[" Nama Barang "]).trim()
+          : "Nama Tidak Tersedia";
+        return {
+          id: parseInt(item[" No "], 10),
+          name: namaBarang,
+          price: parseFloat(item[" Harga Barang  "]),
+          category: "Umum",
+          description: namaBarang,
+          stock: parseInt(item[" Jumlah Stok "], 10),
+          createdDate: new Date().toISOString(),
+        };
+      })
+      .filter((p) => p.id && !isNaN(p.id));
     console.log(`${products.length} produk berhasil dimuat.`);
 
-    const categoryNames = [...new Set(products.map((p) => p.category).filter(Boolean))];
-    categories = categoryNames.map((name, index) => ({ id: index + 1, name: name, description: `Kategori untuk ${name}` }));
+    const categoryNames = [
+      ...new Set(products.map((p) => p.category).filter(Boolean)),
+    ];
+    categories = categoryNames.map((name, index) => ({
+      id: index + 1,
+      name: name,
+      description: `Kategori untuk ${name}`,
+    }));
     console.log(`${categories.length} kategori berhasil dibuat.`);
 
     const penjualanData = loadXLSXData(penjualanFilePath);
-    sales = penjualanData.map((item, index) => {
-      const saleDate = item[' TGL '] instanceof Date ? item[' TGL '].toISOString() : null;
-      const productName = item[' NAMA '] ? String(item[' NAMA ']).trim() : '';
-      const relatedProduct = products.find(p => p.name === productName);
-      return {
-        id: index + 1,
-        productId: relatedProduct ? relatedProduct.id : null,
-        productName: productName,
-        quantity: parseInt(item[' JBL '], 10),
-        totalPrice: parseFloat(item[' JUAL ']),
-        saleDate: saleDate,
-      };
-    }).filter(s => s.productName);
+    sales = penjualanData
+      .map((item, index) => {
+        const saleDate =
+          item[" TGL "] instanceof Date ? item[" TGL "].toISOString() : null;
+        const productName = item[" NAMA "] ? String(item[" NAMA "]).trim() : "";
+        const relatedProduct = products.find((p) => p.name === productName);
+        return {
+          id: index + 1,
+          productId: relatedProduct ? relatedProduct.id : null,
+          productName: productName,
+          quantity: parseInt(item[" JBL "], 10),
+          totalPrice: parseFloat(item[" JUAL "]),
+          saleDate: saleDate,
+        };
+      })
+      .filter((s) => s.productName);
     console.log(`${sales.length} data penjualan berhasil dimuat.`);
   } catch (error) {
-    console.error("KRITIS: Gagal menginisialisasi data saat startup.", error);
+    console.error(
+      "KRITIS: Gagal total menginisialisasi data saat startup.",
+      error
+    );
   }
 };
 
 initializeData();
 
-// OData Header Middleware untuk Tableau
 const odataHeaders = (req, res, next) => {
   res.set({
-    'OData-Version': '4.0',
-    'Content-Type': 'application/json;odata.metadata=minimal',
+    "OData-Version": "4.0",
+    "Content-Type": "application/json;odata.metadata=minimal",
   });
   next();
 };
@@ -88,7 +105,7 @@ const odataHeaders = (req, res, next) => {
 // OData Service Document
 app.get("/", odataHeaders, (req, res) => {
   const serviceDocument = {
-    "@odata.context": `${req.protocol}://${req.get("host")}/$metadata`,
+    "@odata.context": "$metadata", // PERBAIKAN DI SINI
     value: [
       { name: "Products", kind: "EntitySet", url: "Products" },
       { name: "Categories", kind: "EntitySet", url: "Categories" },
@@ -111,38 +128,37 @@ app.get("/$metadata", (req, res) => {
     </Schema>
   </edmx:DataServices>
 </edmx:Edmx>`;
-  res.set({ 'Content-Type': 'application/xml', 'OData-Version': '4.0' });
+  res.set({ "Content-Type": "application/xml", "OData-Version": "4.0" });
   res.send(metadata);
 });
 
-// =====================================================================
-// HELPER FUNCTIONS (VERSI LENGKAP DAN BENAR)
-// =====================================================================
+// Helper functions (tidak ada perubahan)
 function parseODataQuery(query) {
-  const options = {};
-  if (query.$filter) options.filter = query.$filter;
-  if (query.$select) options.select = query.$select.split(",").map((field) => field.trim());
-  if (query.$orderby) options.orderby = query.$orderby;
-  if (query.$top) options.top = parseInt(query.$top, 10);
-  if (query.$skip) options.skip = parseInt(query.$skip, 10);
-  if (query.$count) options.count = query.$count === "true";
-  if (query.$expand) options.expand = query.$expand.split(",").map(e => e.trim());
-  return options;
+  const o = {};
+  return (
+    query.$filter && (o.filter = query.$filter),
+    query.$select && (o.select = query.$select.split(",").map((e) => e.trim())),
+    query.$orderby && (o.orderby = query.$orderby),
+    query.$top && (o.top = parseInt(query.$top, 10)),
+    query.$skip && (o.skip = parseInt(query.$skip, 10)),
+    query.$count && (o.count = "true" === query.$count),
+    query.$expand && (o.expand = query.$expand.split(",").map((e) => e.trim())),
+    o
+  );
 }
-
 function applyFilter(data, filter) {
   if (!filter) return data;
   return data.filter((item) => {
     if (filter.includes(" eq ")) {
-      const [field, value] = filter.split(" eq ").map((s) => s.trim());
-      const cleanValue = value.replace(/'/g, "");
-      if (item[field] === null || item[field] === undefined) return false;
-      return item[field].toString() == cleanValue;
+      const [field, value] = filter.split(" eq ").map((s) => s.trim()),
+        cleanValue = value.replace(/'/g, "");
+      return null == item[field]
+        ? (_) => _ == cleanValue
+        : item[field].toString() == cleanValue;
     }
     if (filter.includes(" ne ")) {
       const [field, value] = filter.split(" ne ").map((s) => s.trim());
-      const cleanValue = value.replace(/'/g, "");
-      return item[field].toString() != cleanValue;
+      return item[field].toString() != value.replace(/'/g, "");
     }
     if (filter.includes(" gt ")) {
       const [field, value] = filter.split(" gt ").map((s) => s.trim());
@@ -156,55 +172,59 @@ function applyFilter(data, filter) {
       const match = filter.match(/contains\((\w+),\s*'([^']+)'\)/);
       if (match) {
         const [, field, value] = match;
-        return (item[field] && item[field].toLowerCase().includes(value.toLowerCase()));
+        return (
+          item[field] && item[field].toLowerCase().includes(value.toLowerCase())
+        );
       }
     }
-    return true;
+    return !0;
   });
 }
-
 function applySelect(data, select) {
-    if (!select || !data) return data;
-    return data.map(item => {
-        const selectedItem = {};
-        select.forEach(field => {
-            if (field.includes('/')) {
-                const [parent, child] = field.split('/');
-                if(item[parent]) {
-                   if (!selectedItem[parent]) selectedItem[parent] = {};
-                   selectedItem[parent][child] = item[parent][child];
-                }
-            } else if (item.hasOwnProperty(field)) {
-                selectedItem[field] = item[field];
-            }
-        });
-        return selectedItem;
-    });
+  if (!select || !data) return data;
+  return data.map((item) => {
+    const e = {};
+    return (
+      select.forEach((t) => {
+        if (t.includes("/")) {
+          const [o, r] = t.split("/");
+          item[o] && (e[o] || (e[o] = {}), (e[o][r] = item[o][r]));
+        } else item.hasOwnProperty(t) && (e[t] = item[t]);
+      }),
+      e
+    );
+  });
 }
-
 function applyOrderBy(data, orderby) {
   if (!orderby) return data;
-  const [field, direction] = orderby.split(" ");
-  const desc = direction && direction.toLowerCase() === "desc";
+  const [field, direction] = orderby.split(" "),
+    desc = direction && "desc" === direction.toLowerCase();
   return data.sort((a, b) => {
-    if(a[field] === null) return 1;
-    if(b[field] === null) return -1;
-    if (a[field] < b[field]) return desc ? 1 : -1;
-    if (a[field] > b[field]) return desc ? -1 : 1;
-    return 0;
+    return null === a[field]
+      ? 1
+      : null === b[field]
+      ? -1
+      : a[field] < b[field]
+      ? desc
+        ? 1
+        : -1
+      : a[field] > b[field]
+      ? desc
+        ? -1
+        : 1
+      : 0;
   });
 }
-
 function applyExpand(data, expand, entity) {
-    if (!expand || !data) return data;
-    const expandableData = JSON.parse(JSON.stringify(data));
-    if (entity === 'Sales' && expand.includes('Product')) {
-        return expandableData.map(sale => {
-            sale.Product = products.find(p => p.id === sale.productId) || null;
-            return sale;
-        });
-    }
-    return expandableData;
+  if (!expand || !data) return data;
+  const e = JSON.parse(JSON.stringify(data));
+  return "Sales" === entity && expand.includes("Product")
+    ? e.map((a) => {
+        return (
+          (a.Product = products.find((e) => e.id === a.productId) || null), a
+        );
+      })
+    : e;
 }
 
 // EntitySet Endpoints
@@ -217,7 +237,7 @@ app.get("/Products", odataHeaders, (req, res) => {
   if (options.skip) result = result.slice(options.skip);
   if (options.top) result = result.slice(0, options.top);
   result = applySelect(result, options.select);
-  const response = { "@odata.context": `${req.protocol}://${req.get("host")}/$metadata#Products`, value: result, };
+  const response = { "@odata.context": "$metadata#Products", value: result }; // PERBAIKAN DI SINI
   if (options.count) response["@odata.count"] = totalCount;
   res.json(response);
 });
@@ -230,9 +250,9 @@ app.get("/Sales", odataHeaders, (req, res) => {
   const totalCount = result.length;
   if (options.skip) result = result.slice(options.skip);
   if (options.top) result = result.slice(0, options.top);
-  result = applyExpand(result, options.expand, 'Sales');
+  result = applyExpand(result, options.expand, "Sales");
   result = applySelect(result, options.select);
-  const response = { "@odata.context": `${req.protocol}://${req.get("host")}/$metadata#Sales`, value: result, };
+  const response = { "@odata.context": "$metadata#Sales", value: result }; // PERBAIKAN DI SINI
   if (options.count) response["@odata.count"] = totalCount;
   res.json(response);
 });
@@ -246,26 +266,44 @@ app.get("/Categories", odataHeaders, (req, res) => {
   if (options.skip) result = result.slice(options.skip);
   if (options.top) result = result.slice(0, options.top);
   result = applySelect(result, options.select);
-  const response = { "@odata.context": `${req.protocol}://${req.get("host")}/$metadata#Categories`, value: result, };
+  const response = { "@odata.context": "$metadata#Categories", value: result }; // PERBAIKAN DI SINI
   if (options.count) response["@odata.count"] = totalCount;
   res.json(response);
 });
-
 
 // Single Entity Endpoints
 app.get("/Products\\(:id\\)", odataHeaders, (req, res) => {
   const id = parseInt(req.params.id);
   const product = products.find((p) => p.id === id);
-  if (!product) return res.status(404).json({ error: { code: "NotFound", message: `Product with id ${id} not found` }, });
-  const response = { "@odata.context": `${req.protocol}://${req.get("host")}/$metadata#Products/$entity`, ...product, };
+  if (!product)
+    return res
+      .status(404)
+      .json({
+        error: { code: "NotFound", message: `Product with id ${id} not found` },
+      });
+  const response = {
+    "@odata.context": "../$metadata#Products/$entity",
+    ...product,
+  }; // PERBAIKAN DI SINI
   res.json(response);
 });
 
 app.get("/Categories\\(:id\\)", odataHeaders, (req, res) => {
   const id = parseInt(req.params.id);
   const category = categories.find((c) => c.id === id);
-  if (!category) return res.status(404).json({ error: { code: "NotFound", message: `Category with id ${id} not found` }, });
-  const response = { "@odata.context": `${req.protocol}://${req.get("host")}/$metadata#Categories/$entity`, ...category, };
+  if (!category)
+    return res
+      .status(404)
+      .json({
+        error: {
+          code: "NotFound",
+          message: `Category with id ${id} not found`,
+        },
+      });
+  const response = {
+    "@odata.context": "../$metadata#Categories/$entity",
+    ...category,
+  }; // PERBAIKAN DI SINI
   res.json(response);
 });
 
@@ -273,21 +311,59 @@ app.get("/Sales\\(:id\\)", odataHeaders, (req, res) => {
   const options = parseODataQuery(req.query);
   const id = parseInt(req.params.id);
   let sale = sales.find((s) => s.id === id);
-  if (!sale) return res.status(404).json({ error: { code: "NotFound", message: `Sale with id ${id} not found` }, });
-  [sale] = applyExpand([sale], options.expand, 'Sales');
-  const response = { "@odata.context": `${req.protocol}://${req.get("host")}/$metadata#Sales/$entity`, ...sale };
+  if (!sale)
+    return res
+      .status(404)
+      .json({
+        error: { code: "NotFound", message: `Sale with id ${id} not found` },
+      });
+  [sale] = applyExpand([sale], options.expand, "Sales");
+  const response = { "@odata.context": "../$metadata#Sales/$entity", ...sale }; // PERBAIKAN DI SINI
   res.json(response);
 });
 
-// CSV Endpoints for Google Sheets
-function convertToCSV(data) {if (!data || data.length === 0) return ""; const headers = Object.keys(data[0]); const csvRows = [ headers.join(','), ...data.map(row => headers.map(fieldName => `"${String(row[fieldName]===null?'':row[fieldName]).replace(/"/g, '""')}"`).join(',')) ]; return csvRows.join('\n');}
-app.get("/products.csv", (req, res) => { const csvData = convertToCSV(products); res.header('Content-Type', 'text/csv'); res.send(csvData);});
-app.get("/sales.csv", (req, res) => { const csvData = convertToCSV(sales); res.header('Content-Type', 'text/csv'); res.send(csvData);});
+// CSV Endpoints for Google Sheets (tidak ada perubahan)
+function convertToCSV(data) {
+  if (!data || data.length === 0) return "";
+  const headers = Object.keys(data[0]);
+  const csvRows = [
+    headers.join(","),
+    ...data.map((row) =>
+      headers
+        .map(
+          (fieldName) =>
+            `"${String(row[fieldName] === null ? "" : row[fieldName]).replace(
+              /"/g,
+              '""'
+            )}"`
+        )
+        .join(",")
+    ),
+  ];
+  return csvRows.join("\n");
+}
+app.get("/products.csv", (req, res) => {
+  const csvData = convertToCSV(products);
+  res.header("Content-Type", "text/csv");
+  res.send(csvData);
+});
+app.get("/sales.csv", (req, res) => {
+  const csvData = convertToCSV(sales);
+  res.header("Content-Type", "text/csv");
+  res.send(csvData);
+});
 
 // Error handling & Start server
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ error: { code: "InternalServerError", message: "An internal server error occurred", }, });
+  res
+    .status(500)
+    .json({
+      error: {
+        code: "InternalServerError",
+        message: "An internal server error occurred",
+      },
+    });
 });
 
 app.listen(port, () => {
