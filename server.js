@@ -90,6 +90,7 @@ const initializeData = () => {
           productId: relatedProduct ? relatedProduct.id : null,
           productName: productName,
           quantity: parseInt(item[" JBL "], 10),
+          costPrice: parseFloat(item[" POKOK "]),
           totalPrice: parseFloat(item[" JUAL "]),
           saleDate: saleDate,
         };
